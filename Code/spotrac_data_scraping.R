@@ -188,24 +188,7 @@ for (list_indexer in 1:length(player_pfr_info_list)) {
 }
 
 player_av_20303_to_23351_df <- (rbindlist(iterative_list))
-write.csv(player_av_20303_to_23351_df,"C:/Users/pauli/OneDrive - The University of Chicago/Documents/NFL Research/VCG Compensatory Picks\\player_av_20303_to_23351_df.csv", row.names = FALSE)
-
-
-
-comp_pick_file_path <- "C:/Users/pauli/OneDrive - The University of Chicago/Documents/NFL Research/VCG Compensatory Picks"
-setwd(comp_pick_file_path)
-player_av_1_to_3362_df <- read.csv("player_av_1_to_3362_df.csv")
-player_av_3363_to_9220_df <- read.csv("player_av_3363_to_9220_df.csv")
-player_av_9221_to_13325_df <- read.csv("player_av_9221_to_13325_df.csv")
-player_av_13326_to_16591_df <- read.csv("player_av_13326_to_16591_df.csv")
-player_av_19399_to_20302_df <- read.csv("player_av_19399_to_20302_df.csv")
-player_av_20303_to_23351_df <- read.csv("player_av_20303_to_23351_df.csv")
-
-all_fa_info$iteration_id <- 1:nrow(all_fa_info)
-player_av_df <- do.call("rbind", list(player_av_1_to_3362_df, player_av_3363_to_9220_df, player_av_9221_to_13325_df,
-                     player_av_13326_to_16591_df, player_av_19399_to_20302_df, player_av_20303_to_23351_df))
-
-
+write.csv(player_av_df,"C:/Users/\\player_av_df.csv", row.names = FALSE)
 
 
 
