@@ -45,7 +45,8 @@ while (nrow(iterative_df)>0) {
   team_agg_valuations$cumsum_valuation <- c(0, cumsum(team_agg_valuations$team_player_valuation)[-nrow(team_agg_valuations)])
   team_agg_valuations$team_player_valuation <- NULL
   
-  ###STEP 3: 
+  ###STEPS 3 and 4 would have to be manually encoded by specific contingencies
+  ###STEP 5: 
   iterative_df <- merge(iterative_df, team_agg_valuations, by="team")
   iterative_df$cumulative_expense <- cumsum(iterative_df$team_player_valuation)-iterative_df$cumsum_valuation
   initial_assignment_df <- iterative_df[iterative_df$player_team_ranking==1 & iterative_df$cumulative_expense<= iterative_df$cap_space,] #identify cases wherein the given team's cumulative sum at the player's position on their ranking is less than their cap space available
