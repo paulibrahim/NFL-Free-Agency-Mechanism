@@ -1,0 +1,125 @@
+---
+title: "Compensatory Pick Formulations"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning = FALSE, message = FALSE)
+```
+Load necessary libraries:
+```{r libraries}
+library(dplyr)
+library(tidyr)
+library(functional)
+library(data.table)
+library(ggplot2)
+library(ggpubr)
+```
+
+Below are the links to all the data necessary for the following analysis. `cap_space_df` and `all_fa_info` are constructed using data scraped from https://www.spotrac.com/.  `player_av_df` and `draft_average_av_df` are constructed using data scraped from https://www.pro-football-reference.com/. The scraper used to glean the data from Spotrac and Pro Football Reference can be found at https://github.com/paulibrahim/NFL-Free-Agency-Mechanism/blob/main/Code/web_scrapers.R. Finally, `draft_av_career_df` is constructed using data from https://mgoblog.com/.
+```{r data}
+cap_space_df <- read.csv("https://raw.githubusercontent.com/paulibrahim/NFL-Free-Agency-Mechanism/main/Data/nfl_cap_space.csv")
+all_fa_info <- read.csv("https://raw.githubusercontent.com/paulibrahim/NFL-Free-Agency-Mechanism/main/Data/fa_info.csv")
+player_av_df <- read.csv("https://raw.githubusercontent.com/paulibrahim/NFL-Free-Agency-Mechanism/main/Data/player_av_df.csv")
+names(cap_space_df)[1] <- "start_year"
+draft_average_av_df <- read.csv("https://raw.githubusercontent.com/paulibrahim/NFL-Free-Agency-Mechanism/main/Data/draft_average_av.csv")
+names(draft_average_av_df)[1] <- "pick"
+draft_av_career_df <- read.csv("https://raw.githubusercontent.com/paulibrahim/NFL-Free-Agency-Mechanism/main/Data/draft_av_career.csv")
+names(draft_av_career_df)[1] <- "round"
+
+
+```
+
+<br />
+First, we clean up the data a little bit and construct some of the necessary metrics to our analysis.
+```{r data_sorting}
+cap_space_df$Cap <- cap_space_df$Cap*1000000
+all_fa_info <-merge(all_fa_info, cap_space_df, by="start_year")
+all_fa_info$cap_prop <- all_fa_info$AAV/all_fa_info$Cap
+all_fa_info$iteration_id <- 1:nrow(all_fa_info)
+
+cap_prop_id_index_df <- data.frame(cap_prop=all_fa_info$cap_prop, Year=all_fa_info$start_year, iteration_id=all_fa_info$iteration_id)
+
+av_cap_prop_df <- merge(cap_prop_id_index_df, player_av_df, by=c("iteration_id", "Year"))
+av_cap_prop_df$AV <- as.numeric(as.character(av_cap_prop_df$AV))
+av_cap_prop_df[["AV"]][is.na(av_cap_prop_df[["AV"]])] <- 0
+av_cap_prop_df$av_per_cap_prop <- av_cap_prop_df$AV/av_cap_prop_df$cap_prop
+av_cap_prop_df <- av_cap_prop_df[order(-av_cap_prop_df$av_per_cap_prop),]
+av_cap_prop_df <- av_cap_prop_df[-1,]
+av_cap_prop_df$idealized_order <- 1:nrow(av_cap_prop_df)
+av_cap_prop_df$log_av <- log(av_cap_prop_df$AV)
+av_cap_prop_df <- av_cap_prop_df[apply(av_cap_prop_df, 1, Compose(is.finite, all)),]
+av_cap_prop_df$cap_prop <- av_cap_prop_df$cap_prop*100
+```
+
+<br />
+Next, we construct our log models. The results are plotted below in `gg1`.
+```{r log_models}
+log.model <-lm(log(average_career) ~ av_pick, draft_av_career_df) #creating log model of pick vs career length
+log.model.df <- data.frame(x = draft_av_career_df$av_pick,
+                           y = exp(fitted(log.model)))
+pick_career_length <- data.frame(pick=c(1:224), exp_career_length=exp(1)^(log.model$coefficients[2]*c(1:224)+log.model$coefficients[1]))
+
+draft_average_av_df <- merge(pick_career_length, draft_average_av_df, by="pick")
+draft_average_av_df$av_p_year <- draft_average_av_df$AV/(draft_average_av_df$exp_career_length)
+
+log.model2 <-lm(log(AV) ~ pick, draft_average_av_df)
+log.model.df2 <- data.frame(x = draft_average_av_df$pick,
+                            y = exp(fitted(log.model2)))
+
+log.model3 <-lm(log(av_p_year) ~ pick, draft_average_av_df)
+log.model.df3 <- data.frame(x = draft_average_av_df$pick,
+                            y = exp(fitted(log.model3)))
+
+pick_career_length <- data.frame(pick=c(1:224), exp_career_length=exp(1)^(log.model$coefficients[2]*c(1:224)+log.model$coefficients[1]))
+
+
+p1 <- ggplot(draft_average_av_df, aes(x=pick, y=AV))+geom_point(size=0.5, alpha=0.5)+
+  geom_line(data = log.model.df2, aes(x, y, color = "Log Model"), size = 2, linetype = 2)+
+  xlab("Overall Pick")+ylab("Career Approximate Value")
+
+p2 <- ggplot(draft_average_av_df, aes(x=pick, y=exp_career_length))+geom_point(size=0.5, alpha=0.5)+
+  geom_line(data = pick_career_length, aes(pick, exp_career_length, color = "Log Model"), size = 2, linetype = 2)+
+  xlab("Overall Pick")+ylab("Career Length")
+
+p3 <- ggplot(draft_average_av_df, aes(x=pick, y=av_p_year))+geom_point(size=0.5, alpha=0.5)+
+  geom_line(data = log.model.df3, aes(x, y, color = "Log Model"), size = 2, linetype = 2)+
+  xlab("Overall Pick")+ylab("Approximate Value Per Year")
+
+gg1 <- (ggarrange(p1, p2, p3, ncol=2, nrow=2,common.legend = TRUE, legend="bottom"))
+print(gg1)
+
+
+
+```
+
+Finally, we assemble the previous results into a log model to predict AV as a function of the proportion of the cap a player consumes. The derivative of this is our alpha function. The results are plotted in `lg_p`.
+```{r assembly}
+
+i <- 0
+bracket_list <- list()
+while (i<20) {
+  prop_bracket <-av_cap_prop_df[av_cap_prop_df$cap_prop>=i & av_cap_prop_df$cap_prop<(i+0.5),]
+  bracket_av_df <- data.frame(AV=mean(prop_bracket$AV), cap_prop=i)
+  i <- i+0.5
+  bracket_list[[i*2]] <- bracket_av_df
+}
+bracket_df <- na.omit(rbindlist(bracket_list))
+
+log.model.avc <-lm(log(AV) ~ cap_prop, bracket_df)
+log.model.avc.df <- data.frame(x = bracket_df$cap_prop,
+                           y = exp(fitted(log.model.avc)))
+log.model.avc.df$deriv <- c(0, (2*diff(log.model.avc.df$y)/(2*diff(log.model.avc.df$x))))
+
+lg_p <- ggplot(av_cap_prop_df, aes(x=cap_prop, y=AV))+
+  geom_line(data = log.model.avc.df, aes(x, y, color = "Log Model"), size = 1, linetype = 2)+
+  geom_line(data = log.model.avc.df, aes(x, deriv, color = "Derivative"), size = 1, linetype = 2)+
+  xlab("Proportion of Cap Consumed")+ylab("Approximate Value")
+print(lg_p)
+
+
+```
+
+
+
+
